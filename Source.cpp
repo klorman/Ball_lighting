@@ -4,8 +4,9 @@
 #include <cmath>
 #include <math.h>
 
+RGBQUAD* Video_memory = NULL;
 
-const int SSAA = 8;
+const int SSAA = 2;
 
 struct point {
 	double x, y, z;
@@ -17,10 +18,10 @@ private:
 	double scaleX_, scaleY_;
 
 public:
-	void draw_pixel(point coords, COLORREF color_of_point);
+	void draw_pixel(point coords, point color_of_point);
 	void draw_point(point coords);
 	void draw_line(point coords0, point coords1);
-	double* to_pixels(point coords);
+	point to_pixels(point coords);
 
 	CoordSys(point coords0, point coords1, double scaleX, double scaleY) {
 		coords0_ = coords0;
@@ -112,12 +113,12 @@ void Vector::draw_vector(point start_coords, CoordSys& vector_space) {
 	vector_space.draw_line(end_coords, end_of_arrow2);
 }
 
-double* CoordSys::to_pixels(point coords) {
+point CoordSys::to_pixels(point coords) {
 	point start_of_coord = { coords1_.x / 2, coords1_.y / 2 };
-	double* rec_coord = new double[2];
+	point rec_coord;
 
-	rec_coord[0] = coords.x * scaleX_ + start_of_coord.x;
-	rec_coord[1] = start_of_coord.y - coords.y * scaleY_;
+	rec_coord.x = coords.x * scaleX_ + start_of_coord.x;
+	rec_coord.y = start_of_coord.y - coords.y * scaleY_;
 
 	return rec_coord;
 }
@@ -126,47 +127,54 @@ void CoordSys::draw_point(point coords) {
 	txSetColor(TX_BLACK);
 	txSetFillColor(TX_BLACK);
 
-	double* rec_coord = to_pixels(coords);
+	point rec_coord = to_pixels(coords);
 
-	if (rec_coord[1] >= coords0_.y &&
-		rec_coord[1] <= coords1_.y &&
-		rec_coord[0] <= coords1_.x &&
-		rec_coord[0] >= coords0_.x)
-		txCircle(rec_coord[0], rec_coord[1], 2);
-
-	delete[] rec_coord;
+	if (rec_coord.y >= coords0_.y &&
+		rec_coord.y <= coords1_.y &&
+		rec_coord.x <= coords1_.x &&
+		rec_coord.x >= coords0_.x)
+		txCircle(rec_coord.x, rec_coord.y, 2);
 }
 
 void CoordSys::draw_line(point coords0, point coords1) {
 	txSetColor(TX_BLUE);
 
-	double* rec_coord0 = to_pixels(coords0);
-	double* rec_coord1 = to_pixels(coords1);
+	point rec_coord0 = to_pixels(coords0);
+	point rec_coord1 = to_pixels(coords1);
 
-	if (rec_coord0[1] >= coords0_.y &&
-		rec_coord0[1] <= coords1_.y &&
-		rec_coord0[0] <= coords1_.x &&
-		rec_coord0[0] >= coords0_.x &&
-		rec_coord1[1] >= coords0_.y &&
-		rec_coord1[1] <= coords1_.y &&
-		rec_coord1[0] <= coords1_.x &&
-		rec_coord1[0] >= coords0_.x)
-		txLine(rec_coord0[0], rec_coord0[1], rec_coord1[0], rec_coord1[1]);
-
-	delete[] rec_coord0;
-	delete[] rec_coord1;
+	if (rec_coord0.y >= coords0_.y &&
+		rec_coord0.y <= coords1_.y &&
+		rec_coord0.x <= coords1_.x &&
+		rec_coord0.x >= coords0_.x &&
+		rec_coord1.y >= coords0_.y &&
+		rec_coord1.y <= coords1_.y &&
+		rec_coord1.x <= coords1_.x &&
+		rec_coord1.x >= coords0_.x)
+		txLine(rec_coord0.x, rec_coord0.y, rec_coord1.x, rec_coord1.y);
 }
 
-void CoordSys::draw_pixel(point coords, COLORREF color_of_point) {
-	txSetFillColor(color_of_point);
-	double* rec_coords = to_pixels(coords);
-	txSetPixel(rec_coords[0], rec_coords[1], color_of_point);
-	delete[] rec_coords;
+void CoordSys::draw_pixel(point coords, point color_of_point) {
+	//txSetFillColor(color_of_point);
+	point rec_coords = to_pixels(coords);
+	//txSetPixel(rec_coords[0], rec_coords[1], color_of_point);
+	RGBQUAD* pixel = &Video_memory[(700 - (int)rec_coords.y) * 700 + (int)rec_coords.x];
+	pixel->rgbRed = color_of_point.x;
+	pixel->rgbGreen = color_of_point.y;
+	pixel->rgbBlue = color_of_point.z;
 }
 
 
+Vector get_circle(Vector& n, Vector& O1, Vector color_of_ball, Vector new_color, double R1, double z) {
+	Vector n1({ n.coords_.x - O1.coords_.x, n.coords_.y - O1.coords_.y, 0 });
 
-
+	if (n1.length() <= R1) {
+		double z1 = sqrt(R1 * R1 - n1.coords_.x * n1.coords_.x - n1.coords_.y * n1.coords_.y);
+		if (z1 + O1.coords_.z >= z && -z1 + O1.coords_.z <= z) {
+			return new_color;
+		}
+	}
+	return color_of_ball;
+}
 
 Vector get_color(CoordSys& vector_space, Vector& n, Vector& light_source, Vector& light_source_color,int R) {
 
@@ -174,23 +182,51 @@ Vector get_color(CoordSys& vector_space, Vector& n, Vector& light_source, Vector
 		double z = sqrt(R * R - n.coords_.x * n.coords_.x - n.coords_.y * n.coords_.y);
 		n.coords_.z = z;
 
+		//n.coords_.x += sin(100 * n.coords_.z) * 50;
+		//n.coords_.y += cos(10 * n.coords_.z) * 500;
+		//n.coords_.z += sin(0.1 * n.coords_.x) * 1000;
+
+		Vector color_of_ball({ 128, 64, 64 });
+
+		Vector O1({ -120, 0, 120 });
+		O1 = SSAA * O1;
+
+		color_of_ball = get_circle(n, O1, color_of_ball, Vector({ 255, 255, 255 }), SSAA * 50, z);
+
+		Vector O2 = O1 + (SSAA * Vector({ -1, 11, 1 }));
+		color_of_ball = get_circle(n, O2, color_of_ball, Vector({ 0, 0, 0 }), SSAA * 22, z);
+		color_of_ball = get_circle(n, O2, color_of_ball, Vector({ 250, 250, 250 }), SSAA * 18, z);
+
+		O2 = O1 + (SSAA * Vector({ -1, -11, 1 }));
+		color_of_ball = get_circle(n, O2, color_of_ball, Vector({ 0, 0, 0 }), SSAA * 22, z);
+		color_of_ball = get_circle(n, O2, color_of_ball, Vector({ 250, 250, 250 }), SSAA * 18, z);
+
+		//O2 = O1 + (SSAA * Vector({ -10, -11, -3 }));
+		//color_of_ball = get_circle(n, O2, color_of_ball, Vector({ 250, 250, 250 }), SSAA * 22, z);
+
+
 		Vector L = light_source + (-1 * n);
 
 		double brightness = (L ^ n) / (L.length() * n.length());
 
 		if (brightness < 0) brightness = 0;
 
-		Vector color_of_ball({ 255, 0, 0 });
-		Vector ambient_lighting({ 0, 0, 255 });
+		Vector ambient_lighting({ 255, 255, 255 });
 
-		Vector observer({ 0, 0, 100350 });
+		Vector observer({ 0, 0, 350 });
 		Vector L1 = 2 * L.length() * brightness * (1. / n.length() * n) + ((-1) * L);
 
-		double k = 1000;
+		double k = 50;
 		double cos_beta = (observer ^ L1) / (observer.length() * L1.length()), sin_beta = 1 * sqrt(1 - pow((cos_beta), 2));
-		double I = pow(sin_beta, k);
+		
+		if (cos_beta < 0 || light_source.coords_.z < 0) cos_beta = 0;
 
-		color_of_ball = 255 * ((brightness * 1. / 255 * color_of_ball) * (1. / 255 * light_source_color) + ((0.04 / 255 * ambient_lighting) * (1. / 255 * light_source_color)));// +I * light_source_color;
+		double I = pow(cos_beta, k);
+
+		Vector lambert = 255 * (brightness * 1. / 255 * color_of_ball) * (1. / 255 * light_source_color);
+		Vector ambient = 255 * ((0.04 / 255 * ambient_lighting) * (1. / 255 * color_of_ball));
+
+		color_of_ball = lambert + ambient + I * light_source_color;
 		
 		return Vector({MIN(color_of_ball.coords_.x, 255),
 					   MIN(color_of_ball.coords_.y, 255),
@@ -217,14 +253,13 @@ void draw_light_source(Vector& light_source_color, Vector& light_source) {
 }
 
 void draw_object(double rotation) {
-
 	txSetFillColor(TX_BLACK);
 	txClear();
 
 	double R = 155;
 	CoordSys vector_space({ 0, 0 }, { 700, 700 }, 1, 1);
 	Vector light_source({ -320, 120, 320 });
-	Vector light_source_color({ 128, 0, 128 });
+	Vector light_source_color({ 255, 0, 255 });
 
 	light_source.coords_.x *= cos(rotation);
 	light_source.coords_.z *= sin(rotation);
@@ -246,7 +281,7 @@ void draw_object(double rotation) {
 
 			n = 1. / SSAA * n;
 
-			if (color_of_ball.length() != 0) vector_space.draw_pixel({ n.coords_.x, n.coords_.y, n.coords_.z }, RGB(color_of_ball.coords_.x, color_of_ball.coords_.y, color_of_ball.coords_.z));
+			if (color_of_ball.length() != 0) vector_space.draw_pixel(point({ n.coords_.x, n.coords_.y, n.coords_.z }), point({ color_of_ball.coords_.x, color_of_ball.coords_.y, color_of_ball.coords_.z }));
 		}
 	}
 
@@ -256,20 +291,23 @@ void draw_object(double rotation) {
 int main() {
 	txCreateWindow(700, 700);
 
+	Video_memory = txVideoMemory();
+
 	txBegin();
 
 	double rotation = 0;
 
-	for (rotation; !txGetAsyncKeyState(VK_ESCAPE);) {
 
+
+	for (rotation; !txGetAsyncKeyState(VK_ESCAPE);) {
 		double fps = txGetFPS();
 
-		rotation += 0.5;
+		if (fps != 0) rotation += 1 / fps;
 
 		draw_object(rotation);
 
 		std::cout << fps << "\n";
-		txSleep(100);
+		txSleep();
 	}
 
 	txEnd();
