@@ -18,20 +18,20 @@ public:
 	void draw_pixel(point coords, point color_of_point);
 	point to_pixels(point coords);
 
-	CoordSys(point size) {
-		size_ = size;
-	}
+	CoordSys(point size)
+		: size_{ size } {}
 };
 
 class Vector {
 public:
-	point coords_;
+	point coords_ = { 0, 0, 0 };
 	double length();
 	Vector normalization();
 
-	Vector(point coords = { 0, 0, 0 }) {
-		coords_ = coords;
-	}
+	Vector() = default;
+
+	Vector(point coords)
+		: coords_{ coords } {}
 };
 
 
@@ -42,11 +42,8 @@ public:
 	Vector light_source_color_;
 	void draw_light_source(CoordSys& vector_space, Object* objects, double R);
 
-	Light_source(Vector light_source, Vector light_source_color) {
-		light_source_ = light_source;
-		light_source_color_ = light_source_color;
-		++count();
-	}
+	Light_source(Vector light_source, Vector light_source_color) 
+		:light_source_{ light_source }, light_source_color_{ light_source_color } {++count(); }
 
 	~Light_source() {
 		--count();
@@ -62,19 +59,17 @@ class Object {
 private:
 	Vector get_circle(Vector& n, Vector& O1, Vector color_of_circle, Vector new_color, double R1, double z);
 	Vector get_color(CoordSys& vector_space, Vector& n, Vector& observer, Vector& O1, Light_source& source);
-	Vector color_;
+	Vector color_ = Vector({ 0, 0, 0 });
 public:
-	Vector O_;
-	double R_;
+	Vector O_ = Vector({ 0, 0, 0 });
+	double R_ = 0;
+
+	Object() = default;
 
 	void draw_object(CoordSys& vector_space, double rotation, Light_source& purple, Light_source& rainbow, Object* objects, size_t test);
 
-	Object(Vector O = Vector({ 0, 0, 0 }), Vector color = Vector({ 0, 0, 0 }), double R = 0) {
-		O_ = O;
-		color_ = color;
-		R_ = R;
-		++count();
-	}
+	Object(Vector O, Vector color, double R) 
+		:O_{ O }, color_{ color }, R_{ R } {++count(); }
 
 	~Object() {
 		--count();
@@ -106,21 +101,35 @@ Vector operator * (Vector a, Vector b) {
 
 double operator ^ (Vector a, Vector b) {
 	return (a.coords_.x * b.coords_.x +
-		a.coords_.y * b.coords_.y +
-		a.coords_.z * b.coords_.z);
+			a.coords_.y * b.coords_.y +
+			a.coords_.z * b.coords_.z);
 }
 
 double Vector::length() {
 	return sqrt(coords_.x * coords_.x +
-		coords_.y * coords_.y +
-		coords_.z * coords_.z);
+				coords_.y * coords_.y +
+				coords_.z * coords_.z);
+}
+
+float Q_rsqrt(float number)
+{
+	float x2 = number * 0.5F, y = number;
+	const float threehalfs = 1.5F;
+	long i = *(long*)& y;
+
+
+	i = 0x5f3759df - (i >> 1);
+	y = *(float*)& i;
+	y *= threehalfs - (x2 * y * y);
+	return y;
 }
 
 Vector Vector::normalization() {
 	Vector temp_vector = *this;
-	double length = temp_vector.length();
+	//double length = temp_vector.length();
 
-	if (length != 0) temp_vector = 1. / length * temp_vector;
+	temp_vector = (Q_rsqrt(float(temp_vector ^ temp_vector))) * temp_vector;
+	//if (length != 0) temp_vector = 1. / length * temp_vector;
 
 	return Vector({ temp_vector.coords_.x,
 					temp_vector.coords_.y,
@@ -164,7 +173,7 @@ Vector Object::get_color(CoordSys& vector_space, Vector& n, Vector& observer, Ve
 
 		//n.coords_.x += sin(10000 * n.coords_.x + 100000000) * 10;
 		//n.coords_.y += cos(10 * n.coords_.z) * 500;
-		n.coords_.z += sin(10000 * n.coords_.z + 100000000) * 10;
+		//n.coords_.z += sin(10000 * n.coords_.z + 100000000) * 10;
 
 		Vector color_of_point = color_;
 
@@ -188,7 +197,8 @@ Vector Object::get_color(CoordSys& vector_space, Vector& n, Vector& observer, Ve
 		if (brightness < 0) brightness = 0;
 
 
-		Vector L1 = 2 * L.length() * brightness * (1. / n.length() * n) + ((-1) * L);
+		//Vector L1 = 2 * L.length() * brightness * ((1. / n.length()) * n) + ((-1) * L);
+		Vector L1 = 2 * L.length() * brightness * (Q_rsqrt(float(n ^ n)) * n) + ((-1) * L);
 
 		double k = 50;
 		double cos_beta = observer.normalization() ^ L1.normalization();// sin_beta = 1 * sqrt(1 - pow((cos_beta), 2));
@@ -352,5 +362,6 @@ int main() {
 	}
 
 	txEnd();
+	txDisableAutoPause();
 	//txUnlock();
 }
